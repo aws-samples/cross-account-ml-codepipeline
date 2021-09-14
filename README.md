@@ -58,9 +58,13 @@ It will take a few minutes for AWS CloudFormation to deploy the resources. We’
 6.	Select **Create stack** in the AWS CloudFormation console in the training account.
 7.	Select **Upload a template file** and choose the `b-cfn-blog.yml file`. Select **Next**.
 8.	Give the stack a name and provide the following parameters from the outputs in stack A:
+
   a.	The role ARN for accessing CodeCommit in the shared service account
+  
   b.	The role ARN of the KMS key
+  
   c.	The shared S3 bucket name
+  
   d.	The AWS account ID for the shared service account
 
 ![image](https://user-images.githubusercontent.com/42812331/133318604-5e0e8b34-b3ed-47f8-b2c5-b96162f1976f.png)
