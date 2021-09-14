@@ -1,12 +1,3 @@
-## My Project
-
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
-
 # Create a cross-account machine learning training and deployment environment with AWS Code Pipeline
 
 A continuous integration and continuous delivery (CI/CD) pipeline helps you automate steps in your machine learning (ML) applications such as data ingestion, data preparation, feature engineering, modeling training, and model deployment. A pipeline across multiple AWS accounts improves security, agility, and resilience because an AWS account provides a natural security and access boundary for your AWS resources. This can keep your production environment safe and available for your customers while keeping training separate.
