@@ -1,0 +1,148 @@
+{
+  "pipeline": {
+    "name": "<CodePipeline_pipeline_name>",
+    "roleArn": "arn:aws:iam::<SharedServicesAccountID>:role/service-role/<CodePipelineServiceRole>",
+    "artifactStore": {
+      "type": "S3",
+      "location": "<CodePipelineArtifactStoreBucket>",
+      "encryptionKey": {
+        "id": "arn:aws:kms:us-east-1:<SharedServicesAccountID>:alias/<sharedKey_alias>",
+        "type": "KMS"
+      }
+    },
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "Source",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "CodeCommit",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "BranchName": "main",
+              "PollForSourceChanges": "false",
+              "RepositoryName": "<CodeCommitRepo>"
+            },
+            "outputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "inputArtifacts": [],
+            "region": "us-east-1",
+            "namespace": "SourceVariables"
+          }
+        ]
+      },
+      {
+        "name": "deploy-cf-train-test",
+        "actions": [
+          {
+            "name": "deploy-cf-train-test-external",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "CloudFormation",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "ActionMode": "CREATE_UPDATE",
+              "OutputFileName": "deploy-cf-train-test-output.json",
+              "RoleArn": "arn:aws:iam::<TrainingAccountID>:role/<CloudFormationRoleB>",
+              "StackName": "xacct-pipeline-demo",
+              "TemplatePath": "SourceArtifact::sf-sm-train-demo.json"
+            },
+            "outputArtifacts": [
+              {
+                "name": "deploy-cf-train-test-output"
+              }
+            ],
+            "inputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "roleArn": "arn:aws:iam::<TrainingAccountID>:role/<CrossAccountRoleB>",
+            "region": "us-east-1",
+            "namespace": "train-stack"
+          },
+          {
+            "name": "invoke-SF",
+            "actionTypeId": {
+              "category": "Invoke",
+              "owner": "AWS",
+              "provider": "StepFunctions",
+              "version": "1"
+            },
+            "runOrder": 2,
+            "configuration": {
+              "InputType": "Literal",
+              "StateMachineArn": "#{train-stack.StateMachineARN}"
+            },
+            "outputArtifacts": [],
+            "inputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "roleArn": "arn:aws:iam::<TrainingAccountID>:role/<CrossAccountRoleB>",
+            "region": "us-east-1"
+          }
+        ]
+      },
+      {
+        "name": "Approval",
+        "actions": [
+          {
+            "name": "Approval",
+            "actionTypeId": {
+              "category": "Approval",
+              "owner": "AWS",
+              "provider": "Manual",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {},
+            "outputArtifacts": [],
+            "inputArtifacts": [],
+            "region": "us-east-1"
+          }
+        ]
+      },
+      {
+        "name": "Deploy",
+        "actions": [
+          {
+            "name": "deploy-model",
+            "actionTypeId": {
+              "category": "Invoke",
+              "owner": "AWS",
+              "provider": "Lambda",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "FunctionName": "deploy-model",
+              "UserParameters": "<CodePipelinePassRoleForC>"
+            },
+            "outputArtifacts": [],
+            "inputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "roleArn": "arn:aws:iam::<ProductionAccountID>:role/<CrossAccountRoleC>",
+            "region": "us-east-1"
+          }
+        ]
+      }
+    ],
+    "version": 18
+  }
+}

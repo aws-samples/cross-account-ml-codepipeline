@@ -1,0 +1,175 @@
+Parameters:
+  SharedServicesAccountID:
+    Description: 'Account ID to host shared services'
+    Type: String
+  SharedS3Bucket:
+    Description: 'S3 bucket name of shared artifacts'
+    Type: String
+  CodeCommitRepoAccessRole:
+    Description: Cross-account CodeCommit access role in shared services account
+    Type: String
+  SharedKMSKeyARN:
+    Description: 'ARN of shared KMS key in A'
+    Type: String
+
+Resources:
+  S3BucketAccessForCloudFormationB:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 's3:Get*'
+            - 's3:Put*'
+            Resource: !Sub 'arn:aws:s3:::${SharedS3Bucket}/*'
+          -
+            Effect: Allow
+            Action:
+            - 's3:ListBucket*'
+            Resource: !Sub 'arn:aws:s3:::${SharedS3Bucket}'
+  S3BucketAccessForCrossAccountRoleB:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 's3:GetObject*'
+            - 's3:PutObject'
+            - 's3:PutObjectAcl'
+            - 'codecommit:ListBranches'
+            - 'codecommit:ListRepositories'
+            Resource: !Sub 'arn:aws:s3:::${SharedS3Bucket}/*'
+  CodeCommitAccessPolicyAFromB:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 'sts:AssumeRole*'
+            Resource:
+            - !Ref 'CodeCommitRepoAccessRole'
+  KMSKeyAccessForB:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 'kms:DescribeKey'
+            - 'kms:GenerateDataKey*'
+            - 'kms:Encrypt'
+            - 'kms:ReEncrypt'
+            - 'kms:Decrypt'
+            Resource: !Ref 'SharedKMSKeyARN'
+  PassRoleforB:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 'iam:PassRole'
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}*'
+  StepFunctionExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - 
+            Effect: Allow
+            Action:
+              - 'sagemaker:CreateTrainingJob'
+              - 'sagemaker:DescribeTrainingJob'
+              - 'sagemaker:StopTrainingJob'
+            Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:training-job/*'
+          - 
+            Effect: Allow
+            Action:
+              - 'sagemaker:ListTags'
+            Resource: '*'
+          - 
+            Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource: !GetAtt 'CloudFormationRoleB.Arn'
+            Condition:
+              StringEquals:
+                iam:PassedToService: sagemaker.amazonaws.com
+          - 
+            Effect: Allow
+            Action:
+              - 'events:PutTargets'
+              - 'events:PutRule'
+              - 'events:DescribeRule'
+            Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForSageMakerTrainingJobsRule'
+  CloudFormationRoleB:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+                - sagemaker.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref S3BucketAccessForCloudFormationB
+        - !Ref KMSKeyAccessForB
+        - !Ref PassRoleforB
+        - 'arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess'
+  CrossAccountRoleB:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${SharedServicesAccountID}:root'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref S3BucketAccessForCrossAccountRoleB
+        - !Ref KMSKeyAccessForB
+        - !Ref PassRoleforB
+        - !Ref CodeCommitAccessPolicyAFromB
+        - 'arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCloudFormationFullAccess'
+  StepFunctionExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref StepFunctionExecutionPolicy
+        - !Ref PassRoleforB
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaRole'

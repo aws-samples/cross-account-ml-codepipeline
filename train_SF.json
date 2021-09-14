@@ -1,0 +1,47 @@
+{
+  "StartAt": "Processing_data",
+  "States": {
+    "Processing_data": {
+      "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+      "Parameters": {
+        "AlgorithmSpecification": {
+          "TrainingImage": "${TrainingImageURL}",
+          "TrainingInputMode": "File"
+        },
+        "OutputDataConfig": {
+          "S3OutputPath": "${Model_S3OutputPath}"
+        },
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": 86400
+        },
+        "ResourceConfig": {
+          "InstanceCount": 1,
+          "InstanceType": "ml.m5.xlarge",
+          "VolumeSizeInGB": 30
+        },
+        "RoleArn": "${RoleArn_CF}",
+        "InputDataConfig": [
+          {
+            "DataSource": {
+              "S3DataSource": {
+                "S3DataDistributionType": "ShardedByS3Key",
+                "S3DataType": "S3Prefix",
+                "S3Uri": "${Train_data_S3Uri}"
+              }
+            },
+            "ChannelName": "train",
+            "ContentType": "text/csv"
+          }
+        ],
+        "HyperParameters": {
+          "objective": "reg:logistic",
+          "eval_metric": "rmse",
+          "num_round": "1"
+        },
+        "TrainingJobName.$": "$$.Execution.Name"
+      },
+      "Type": "Task",
+      "End": true
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "An example template for a Step Functions state machine.",
+  "Resources": {
+    "MyStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": "SM-train-Step_Function",
+        "StateMachineType": "STANDARD",
+        "DefinitionSubstitutions": {
+          "TrainingImageURL": "811284229777.dkr.ecr.us-east-1.amazonaws.com/xgboost:latest",
+          "RoleArn_CF": "arn:aws:iam::<TrainingAccountID>:role/<CloudFormationRoleB>",
+          "Train_data_S3Uri": "s3://<CodePipelineArtifactStoreBucket>/data/train.csv",
+          "Model_S3OutputPath": "s3://<CodePipelineArtifactStoreBucket>/models"
+        },
+        "DefinitionS3Location": {
+          "Bucket": "<CodePipelineArtifactStoreBucket>",
+          "Key": "train_SF.json"
+        },
+        "RoleArn": "arn:aws:iam::<TrainingAccountID>:role/<StepFunctionExecutionRole>",
+        "Tags": [
+          {
+            "Key": "keyname1",
+            "Value": "value1"
+          },
+          {
+            "Key": "keyname2",
+            "Value": "value2"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "StateMachineARN": {
+      "Description": "ARN of state machine",
+      "Value": {
+        "Ref": "MyStateMachine"
+      }
+    }
+  }
+}

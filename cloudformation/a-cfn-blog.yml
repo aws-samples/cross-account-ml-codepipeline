@@ -1,0 +1,277 @@
+Parameters:
+  SharedServicesAccountID:
+    Description: 'Account ID to host shared services'
+    Type: String
+  TrainingAccountID:
+    Description: 'Account ID to conduct training'
+    Type: String    
+  ProductionAccountID:
+    Description: 'Account ID to host model endpoint'
+    Type: String
+  CodeCommitRepoName:
+    Description: 'A name for your CodeCommit repository'
+    Type: String
+    
+Resources:
+  CodeCommitRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Ref 'CodeCommitRepoName'
+  CodeCommitRepoAccess:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Sid: AllowCodeCommitAccess
+            Effect: Allow
+            Action:
+              - codecommit:BatchGet*
+              - codecommit:Create*
+              - codecommit:DeleteBranch
+              - codecommit:Get*
+              - codecommit:List*
+              - codecommit:Describe*
+              - codecommit:Put*
+              - codecommit:Post*
+              - codecommit:Merge*
+              - codecommit:Test*
+              - codecommit:Update*
+              - codecommit:GitPull
+              - codecommit:GitPush
+              - codecommit:UploadArchive
+            Resource: !GetAtt 'CodeCommitRepo.Arn'
+          -
+            Sid: AllowListRepositories
+            Effect: Allow
+            Action:
+              - codecommit:ListRepositories
+            Resource: '*'
+  CodeCommitRepoAccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+                - !GetAtt 'CodePipelineServiceRole.Arn'
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref CodeCommitRepoAccess
+  sharedKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-consolepolicy-blogsample
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${SharedServicesAccountID}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        - Sid: Allow access for Key Administrators
+          Effect: Allow
+          Principal:
+            AWS:
+              - !Sub 'arn:aws:iam::${SharedServicesAccountID}:root'
+              - !GetAtt 'CodePipelineServiceRole.Arn'
+          Action:
+          - 'kms:Create*'
+          - 'kms:Describe*'
+          - 'kms:Enable*'
+          - 'kms:List*'
+          - 'kms:Put*'
+          - 'kms:Update*'
+          - 'kms:Revoke*'
+          - 'kms:Disable*'
+          - 'kms:Get*'
+          - 'kms:Delete*'
+          - 'kms:ScheduleKeyDeletion'
+          - 'kms:CancelKeyDeletion'
+          Resource: '*'
+        - Sid: Allow use of the key
+          Effect: Allow
+          Principal:
+            AWS: 
+              - !GetAtt 'CodePipelineServiceRole.Arn'
+              - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+              - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+          Action:
+          - 'kms:DescribeKey'
+          - 'kms:Encrypt'
+          - 'kms:Decrypt'
+          - 'kms:ReEncrypt*'
+          - 'kms:GenerateDataKey'
+          - 'kms:GenerateDataKeyWithoutPlaintext'
+          Resource: '*'
+        - Sid: Allow attachment of persistent resources
+          Effect: Allow
+          Principal: 
+            AWS:
+              - !GetAtt 'CodePipelineServiceRole.Arn'
+              - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+              - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+          Action:
+          - 'kms:CreateGrant'
+          - 'kms:ListGrants'
+          - 'kms:RevokeGrant'
+          Resource: '*'
+          Condition:
+            Bool:
+              'kms:GrantIsForAWSResource': true
+  CodePipelineArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+  CodePipelineArtifactStoreBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CodePipelineArtifactStoreBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactStoreBucket.Arn, '/*' ] ]
+            Condition:
+              StringNotEquals: 
+                s3:x-amz-server-side-encryption: aws:kms
+          -
+            Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactStoreBucket.Arn, '/*' ] ]
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - 
+            Sid: Allow cross-account bucket action access
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+            Action:
+            - 's3:Get*'
+            - 's3:Put*'
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactStoreBucket.Arn, '/*' ] ]
+          -
+            Sid: Allow cross-account bucket access
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+            Action: s3:ListBucket
+            Resource: !GetAtt 'CodePipelineArtifactStoreBucket.Arn'
+  CrossAccountRoleA:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+          - 
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+            Action: sts:AssumeRole
+  AssumeRoleFromBC:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 'sts:AssumeRole'
+            Resource:
+            - !Sub 'arn:aws:iam::${TrainingAccountID}:role/*'
+            - !Sub 'arn:aws:iam::${ProductionAccountID}:role/*'
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${TrainingAccountID}:root'
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+              Service: 
+                - codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - !Ref 'CodeCommitRepoAccess'
+        - !Ref 'AssumeRoleFromBC'
+  PassRoleForC:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+            - 'iam:PassRole'
+            Resource:
+            - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}*'
+  CodePipelinePassRoleForC:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+          - 
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${ProductionAccountID}:root'
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Ref PassRoleForC
+        - 'arn:aws:iam::aws:policy/AWSCodePipelineCustomActionAccess'
+Outputs:
+  S3Bucket:
+    Description: Shared S3 Bucket name
+    Value: !Ref CodePipelineArtifactStoreBucket
+  KMSKeyARN:
+    Description: KMS Key ARN
+    Value: !GetAtt sharedKey.Arn
+  CodePipelineRole:
+    Description: CodePipeline role ARN
+    Value: !GetAtt CodePipelineServiceRole.Arn
+  CodeCommitRepoAccessRole:
+    Description: CodeCommit access role ARN
+    Value: !GetAtt CodeCommitRepoAccessRole.Arn
