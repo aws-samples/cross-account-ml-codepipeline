@@ -35,6 +35,7 @@ For this post, we use three accounts:
 ## Deploy AWS CloudFormation Templates
 
 Run the following command to copy the Git repository.
+
 `git clone https://github.com/aws-samples/cross-account-ml-train-deploy-codepipeline`
 
 ### In the shared service account (Account A)
