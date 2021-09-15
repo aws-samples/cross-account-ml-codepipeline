@@ -128,7 +128,7 @@
             },
             "runOrder": 1,
             "configuration": {
-              "FunctionName": "deploy-model",
+              "FunctionName": "<LambdaFunctionName>",
               "UserParameters": "<CodePipelinePassRoleForC>"
             },
             "outputArtifacts": [],
