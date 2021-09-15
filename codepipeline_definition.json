@@ -4,9 +4,9 @@
     "roleArn": "arn:aws:iam::<SharedServicesAccountID>:role/service-role/<CodePipelineServiceRole>",
     "artifactStore": {
       "type": "S3",
-      "location": "<CodePipelineArtifactStoreBucket>",
+      "location": "<CodePipelineArtifactStoreBucketName>",
       "encryptionKey": {
-        "id": "arn:aws:kms:us-east-1:<SharedServicesAccountID>:alias/<sharedKey_alias>",
+        "id": "arn:aws:kms:us-east-1:<SharedServicesAccountID>:key/<KMSKeyARNId>",
         "type": "KMS"
       }
     },
@@ -26,7 +26,7 @@
             "configuration": {
               "BranchName": "main",
               "PollForSourceChanges": "false",
-              "RepositoryName": "<CodeCommitRepo>"
+              "RepositoryName": "<CodeCommitRepoName>"
             },
             "outputArtifacts": [
               {
@@ -55,7 +55,7 @@
               "ActionMode": "CREATE_UPDATE",
               "OutputFileName": "deploy-cf-train-test-output.json",
               "RoleArn": "arn:aws:iam::<TrainingAccountID>:role/<CloudFormationRoleB>",
-              "StackName": "xacct-pipeline-demo",
+              "StackName": "crossaccount-codepipeline-blog-demo",
               "TemplatePath": "SourceArtifact::sf-sm-train-demo.json"
             },
             "outputArtifacts": [
@@ -129,7 +129,7 @@
             "runOrder": 1,
             "configuration": {
               "FunctionName": "<LambdaFunctionName>",
-              "UserParameters": "<CodePipelinePassRoleForC>"
+              "UserParameters": "<CodePipelinePassRoleForC_Name>"
             },
             "outputArtifacts": [],
             "inputArtifacts": [
